@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang='sv'>
+
+<head>
+  <meta charset='UTF-8'>
+  <title>Ärendeöversikt</title>
+  <link href="https://cdn.jsdelivr.net/npm/@radix-ui/colors@latest/black-alpha.css" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    header {
+      background: #111;
+      color: white;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.2em;
+    }
+
+    header button {
+      background: #333;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      cursor: pointer;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+
+    #dataSource {
+      font-size: 0.85em;
+      opacity: 0.8;
+      margin-left: 10px;
+    }
+
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      padding: 10px;
+      background: #eee;
+      flex-wrap: wrap;
+    }
+
+    .filter-bar select,
+    .filter-bar input {
+      padding: 5px;
+    }
+
+    .kanban-board {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      padding: 10px;
+      min-height: 400px;
+    }
+
+    .kanban-column {
+      flex: 1;
+      min-width: 250px;
+      background: #f4f4f4;
+      padding: 10px;
+      border-radius: 5px;
+    }
+
+    .kanban-column-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #ddd;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .count-badge {
+      background: #333;
+      color: white;
+      border-radius: 12px;
+      padding: 2px 8px;
+      font-size: 0.8em;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    .kanban-card {
+      background: white;
+      margin: 5px 0;
+      padding: 10px;
+      border-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      font-size: 0.9em;
+      position: relative;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      opacity: 0;
+      animation: fadeIn 0.3s forwards;
+    }
+
+    .kanban-card:hover {
+      transform: translateY(-3px) scale(1.01);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-high {
+      border-left: 5px solid red;
+    }
+
+    .card-medium {
+      border-left: 5px solid orange;
+    }
+
+    .card-low {
+      border-left: 5px solid green;
+    }
+
+    .card-link {
+      position: absolute;
+      bottom: 8px;
+      right: 10px;
+      font-size: 1.2em;
+      display: none;
+      text-decoration: none;
+    }
+
+    .kanban-card:hover .card-link {
+      display: inline;
+    }
+
+    .kanban-card:hover .mark-handled {
+      display: inline;
+      opacity: 1;
+    }
+
+    .mark-handled {
+      opacity: 0;
+      display: none;
+      position: absolute;
+      top: 6px;
+      right: 10px;
+      background: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 22px;
+      height: 22px;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 22px;
+      text-align: center;
+      padding: 0;
+    }
+
+    .mark-handled:hover {
+      background: #388e3c;
+    }
+
+    @keyframes fadeIn {
+      to {
+        opacity: 1;
+      }
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 6px;
+      width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-content h2 {
+      margin-top: 0;
+    }
+
+    #handledList {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    #handledList li {
+      padding: 6px 0;
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #handledList button {
+      background: #666;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 6px;
+      cursor: pointer;
+    }
+
+    #handledList button:hover {
+      background: #444;
+    }
+
+    .close-modal {
+      float: right;
+      background: #c00;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 10px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .close-modal:hover {
+      background: #900;
+    }
+
+    .reset-btn {
+      background: #c00;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 10px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .reset-btn:hover {
+      background: #900;
+    }
+
+    /* Tabellvy */
+    #tableView table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.9em;
+    }
+
+    #tableView th,
+    #tableView td {
+      border: 1px solid #ddd;
+      padding: 6px;
+    }
+
+    #tableView th {
+      background: #ddd;
+      text-align: left;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 20px;
+    }
+
+    .dashboard-card {
+      background: #f4f4f4;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .dashboard-card h3 {
+      margin: 0;
+      font-size: 1.1em;
+      color: #333;
+    }
+
+    .dashboard-card p {
+      font-size: 1.4em;
+      margin: 10px 0 0;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div style="display:flex; align-items:center;">
+      <h1>Ärendeöversikt</h1>
+      <span id="dataSource">Ingen data laddad</span>
+    </div>
+    <div>
+      <button id="kanbanBtn">Kanban</button>
+      <button id="tableBtn">Tabell</button>
+      <button id="dashboardBtn">Dashboard</button>
+      <button id="handledBtn">Hanterade ärenden</button>
+      <button id="fileButton" onclick="document.getElementById('csvFile').click()">Byt fil</button>
+      <input type='file' id='csvFile' accept='.csv' style='display:none' />
+    </div>
+  </header>
+
+
+
+  <div class='filter-bar'>
+    <label>Filtrera på prioritet:
+      <select id='priorityFilter'>
+        <option value=''>Alla</option>
+        <option value='Hög'>Hög</option>
+        <option value='Medel'>Medel</option>
+        <option value='Låg'>Låg</option>
+      </select>
+    </label>
+    <label>Filtrera på typ:
+      <select id='typeFilter'>
+        <option value=''>Alla</option>
+      </select>
+    </label>
+    <label>Filtrera på beställare:
+      <select id='ownerFilter'>
+        <option value=''>Alla</option>
+      </select>
+    </label>
+    <label>Sök:
+      <input type="text" id="searchInput" placeholder="Sök i ämne, ID, beskrivning" />
+    </label>
+  </div>
+
+
+
+  <!-- Modal för hanterade ärenden -->
+  <div id="handledModal" class="modal">
+    <div class="modal-content">
+      <button class="reset-btn" onclick="resetHandled()">Återställ alla</button>
+      <button class="close-modal" onclick="closeHandled()">Stäng</button>
+      <h2>Hanterade ärenden</h2>
+      <ul id="handledList"></ul>
+    </div>
+  </div>
+
+  <!-- Vyer -->
+  <div class='kanban-board' id='kanbanBoard'></div>
+  <div id="tableView" style="display:none; padding:10px;"></div>
+  <div id="dashboardView" style="display:none; padding:20px;"></div>
+
+
+  <script src='https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js'></script>
+  <script>
+    let allData = [];
+    let currentView = "kanban"; // aktiv vy
+
+    function setDataSource(text) {
+      document.getElementById("dataSource").textContent = text;
+    }
+
+    // --- Hanterade ärenden ---
+    function getHandled() {
+      return JSON.parse(localStorage.getItem("handledTickets") || "[]");
+    }
+    function saveHandled(list) {
+      localStorage.setItem("handledTickets", JSON.stringify(list));
+      renderHandledList();
+    }
+    function markHandled(ticketId) {
+      let handled = getHandled();
+      if (!handled.includes(ticketId)) {
+        handled.push(ticketId);
+        saveHandled(handled);
+      }
+      applyFilters();
+    }
+    function unmarkHandled(ticketId) {
+      let handled = getHandled().filter(id => id !== ticketId);
+      saveHandled(handled);
+      applyFilters();
+    }
+    function resetHandled() {
+      localStorage.setItem("handledTickets", JSON.stringify([]));
+      applyFilters();
+      renderHandledList();
+    }
+    function renderHandledList() {
+      const ul = document.getElementById("handledList");
+      ul.innerHTML = "";
+      let handled = getHandled();
+      handled.forEach(ticketId => {
+        const ticket = allData.find(t => t["Ärende-ID"] === ticketId);
+        const li = document.createElement("li");
+        li.innerHTML = `
+      <span><strong>${ticketId}</strong> – ${ticket?.["Ämne"] || ""}</span>
+      <button onclick="unmarkHandled('${ticketId}')">↩</button>
+    `;
+        ul.appendChild(li);
+      });
+    }
+
+    // --- Modal ---
+    document.getElementById("handledBtn").addEventListener("click", () => {
+      document.getElementById("handledModal").style.display = "flex";
+      renderHandledList();
+    });
+    function closeHandled() {
+      document.getElementById("handledModal").style.display = "none";
+    }
+
+    // --- Vyknappar ---
+    document.getElementById("kanbanBtn").addEventListener("click", () => {
+      currentView = "kanban";
+      document.getElementById("kanbanBoard").style.display = "flex";
+      document.getElementById("tableView").style.display = "none";
+      applyFilters();
+    });
+    document.getElementById("tableBtn").addEventListener("click", () => {
+      currentView = "table";
+      document.getElementById("kanbanBoard").style.display = "none";
+      document.getElementById("tableView").style.display = "block";
+      applyFilters();
+    });
+
+    // --- Filtrering ---
+    function applyFilters() {
+      const priority = document.getElementById('priorityFilter').value;
+      const type = document.getElementById('typeFilter').value;
+      const owner = document.getElementById('ownerFilter').value;
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const handled = getHandled();
+
+      let filtered = allData.filter(item => {
+        return (!priority || item['Prioritet'] === priority) &&
+          (!type || item['Typ'] === type) &&
+          (!owner || item['Beställarens namn'] === owner) &&
+          (
+            !search ||
+            item['Ämne']?.toLowerCase().includes(search) ||
+            item['Ärende-ID']?.toLowerCase().includes(search) ||
+            item['Beskrivning']?.toLowerCase().includes(search)
+          ) &&
+          !handled.includes(item['Ärende-ID']);
+      });
+
+      if (currentView === "kanban") renderKanban(filtered);
+      else if (currentView === "table") renderTable(filtered);
+      else if (currentView === "dashboard") renderDashboard(filtered);
+    }
+
+
+    // --- Populera filter ---
+    function populateFilters(data) {
+      function fillSelect(id, values) {
+        const select = document.getElementById(id);
+        select.innerHTML = "<option value=''>Alla</option>";
+        values.forEach(v => {
+          if (v) {
+            const opt = document.createElement('option');
+            opt.value = v; opt.textContent = v;
+            select.appendChild(opt);
+          }
+        });
+      }
+      fillSelect('typeFilter', [...new Set(data.map(i => i['Typ']))]);
+      fillSelect('ownerFilter', [...new Set(data.map(i => i['Beställarens namn']))]);
+    }
+
+    // --- Rendera Kanban ---
+    function renderKanban(data) {
+      const allStatuses = [...new Set(allData.map(item => item['Status']))];
+      const board = document.getElementById('kanbanBoard');
+      board.innerHTML = '';
+
+      allStatuses.forEach(status => {
+        const columnItems = data.filter(item => item['Status'] === status);
+        columnItems.sort((a, b) => new Date(b['Tid för senaste uppdatering']) - new Date(a['Tid för senaste uppdatering']));
+
+        const column = document.createElement('div');
+        column.className = 'kanban-column';
+        column.innerHTML = `
+      <div class="kanban-column-header">
+        <span>${status}</span>
+        <span class="count-badge">${columnItems.length}</span>
+      </div>
+    `;
+
+        columnItems.forEach(item => {
+          const priority = item['Prioritet']?.toLowerCase();
+          let priorityClass = 'card-low';
+          if (priority === 'hög') priorityClass = 'card-high';
+          else if (priority === 'medel') priorityClass = 'card-medium';
+
+          const card = document.createElement('div');
+          card.className = `kanban-card ${priorityClass}`;
+          const ticketId = item['Ärende-ID'];
+          const link = `https://liseberghelp.visit.com/sv-SE/support/tickets/${ticketId}`;
+          card.innerHTML = `
+        <button class="mark-handled" onclick="markHandled('${ticketId}')">✓</button>
+        <strong>${item['Ämne']}</strong><br>
+        <em>ID:</em> ${ticketId}<br>
+        <em>Prioritet:</em> ${item['Prioritet']}<br>
+        <em>Typ:</em> ${item['Typ']}<br>
+        <em>Beställare:</em> ${item['Beställarens namn']}<br>
+        <em>Senast uppdaterad:</em> ${item['Tid för senaste uppdatering']}<br>
+        <p>${item['Beskrivning']}</p>
+        <a class='card-link' href='${link}' target='_blank'>&rarr;</a>
+      `;
+          column.appendChild(card);
+        });
+
+        board.appendChild(column);
+      });
+    }
+
+    // --- Rendera Tabell ---
+    function renderTable(data) {
+      const container = document.getElementById("tableView");
+      if (!data.length) {
+        container.innerHTML = "<p>Inga ärenden matchar filtren.</p>";
+        return;
+      }
+      let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Ämne</th>
+          <th>Status</th>
+          <th>Prioritet</th>
+          <th>Typ</th>
+          <th>Beställare</th>
+          <th>Senast uppdaterad</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+      data.forEach(item => {
+        html += `
+      <tr>
+        <td>${item["Ärende-ID"]}</td>
+        <td>${item["Ämne"]}</td>
+        <td>${item["Status"]}</td>
+        <td>${item["Prioritet"]}</td>
+        <td>${item["Typ"]}</td>
+        <td>${item["Beställarens namn"]}</td>
+        <td>${item["Tid för senaste uppdatering"]}</td>
+      </tr>
+    `;
+      });
+      html += "</tbody></table>";
+      container.innerHTML = html;
+    }
+
+    // --- LocalStorage ---
+    function loadFromLocalStorage() {
+      const stored = localStorage.getItem('csvData');
+      if (stored) {
+        allData = JSON.parse(stored);
+        populateFilters(allData);
+        applyFilters();
+        setDataSource("Visar senaste sparade data (lokalt)");
+      } else {
+        setDataSource("Ingen data laddad");
+      }
+    }
+
+    // --- Dashboard ---
+    document.getElementById("dashboardBtn").addEventListener("click", () => {
+      currentView = "dashboard";
+      document.getElementById("kanbanBoard").style.display = "none";
+      document.getElementById("tableView").style.display = "none";
+      document.getElementById("dashboardView").style.display = "block";
+      applyFilters();
+    });
+
+    function renderDashboard(data) {
+      const container = document.getElementById("dashboardView");
+
+      if (!data.length) {
+        container.innerHTML = "<p>Inga ärenden matchar filtren.</p>";
+        return;
+      }
+
+      // KPI 1: Totalt antal
+      const total = data.length;
+
+      // KPI 2: Antal per prioritet
+      const high = data.filter(d => d["Prioritet"]?.toLowerCase() === "hög").length;
+      const medium = data.filter(d => d["Prioritet"]?.toLowerCase() === "medel").length;
+      const low = data.filter(d => d["Prioritet"]?.toLowerCase() === "låg").length;
+
+      // KPI 3: Äldsta uppdateringen
+      const oldest = Math.max(...data.map(d => Date.now() - new Date(d["Tid för senaste uppdatering"]).getTime()));
+      const oldestDays = Math.floor(oldest / (1000 * 60 * 60 * 24));
+
+      // KPI 4: Genomsnittlig ålder
+      const avg = data.reduce((sum, d) => sum + (Date.now() - new Date(d["Tid för senaste uppdatering"]).getTime()), 0) / data.length;
+      const avgDays = Math.floor(avg / (1000 * 60 * 60 * 24));
+
+      container.innerHTML = `
+    <div class="dashboard-grid">
+      <div class="dashboard-card">
+        <h3>Totalt öppna</h3>
+        <p>${total}</p>
+      </div>
+      <div class="dashboard-card">
+        <h3>Hög prioritet</h3>
+        <p>${high}</p>
+      </div>
+      <div class="dashboard-card">
+        <h3>Medel prioritet</h3>
+        <p>${medium}</p>
+      </div>
+      <div class="dashboard-card">
+        <h3>Låg prioritet</h3>
+        <p>${low}</p>
+      </div>
+      <div class="dashboard-card">
+        <h3>Äldsta ärendet</h3>
+        <p>${oldestDays} dagar</p>
+      </div>
+      <div class="dashboard-card">
+        <h3>Genomsnittlig ålder</h3>
+        <p>${avgDays} dagar</p>
+      </div>
+    </div>
+  `;
+    }
+
+
+    // --- Event listeners ---
+    document.querySelectorAll('.filter-bar select, #searchInput').forEach(el => {
+      el.addEventListener('change', applyFilters);
+      el.addEventListener('keyup', applyFilters);
+    });
+    document.getElementById('csvFile').addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function (results) {
+          allData = results.data;
+          localStorage.setItem('csvData', JSON.stringify(allData));
+          populateFilters(allData);
+          applyFilters();
+          setDataSource("Data laddad via fil");
+        }
+      });
+    });
+
+
+    window.addEventListener('load', loadFromLocalStorage);
+  </script>
+</body>
+
+</html>
