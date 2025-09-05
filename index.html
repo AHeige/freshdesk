@@ -57,9 +57,11 @@
     .kanban-board {
       display: flex;
       gap: 20px;
-      flex-wrap: wrap;
+      /* flex-wrap: wrap; */
       padding: 10px;
       min-height: 400px;
+      /* justify-content: center; */
+      overflow: auto;
     }
 
     .kanban-column {
@@ -294,6 +296,15 @@
       margin: 10px 0 0;
       font-weight: bold;
     }
+
+    .no-data {
+      display: flex;
+      flex-direction: column;
+      flex-wrap: wrap;
+      justify-self: center;
+      justify-content: center;
+      align-items: center;
+    }
   </style>
 </head>
 
@@ -476,9 +487,24 @@
 
     // --- Rendera Kanban ---
     function renderKanban(data) {
+      console.log(data)
+
+
       const allStatuses = [...new Set(allData.map(item => item['Status']))];
       const board = document.getElementById('kanbanBoard');
       board.innerHTML = '';
+
+      if (data.length === 0) {
+        board.style.justifyContent = "center"
+        board.innerHTML = `<div class="no-data">Filen returnerade inte någon data - eller så har du inte valt någon fil än. 
+          <button id="fileButton" onclick="document.getElementById('csvFile').click()">Byt fil</button> 
+          </div>`
+      } else {
+        board.style.justifyContent = "unset"
+
+      }
+
+
 
       allStatuses.forEach(status => {
         const columnItems = data.filter(item => item['Status'] === status);
