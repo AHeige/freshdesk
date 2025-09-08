@@ -20,6 +20,7 @@
       align-items: center;
     }
 
+
     header h1 {
       margin: 0;
       font-size: 1.2em;
@@ -33,6 +34,14 @@
       cursor: pointer;
       border-radius: 4px;
       margin-left: 8px;
+    }
+
+    header button.active-view {
+      background: #555;
+      /* mörkare bakgrund */
+      font-weight: bold;
+      /* fet text */
+      border: 1px solid #888;
     }
 
     #dataSource {
@@ -420,6 +429,37 @@
       border-radius: 4px;
       cursor: pointer;
     }
+
+    /* Stjärnmarkering */
+    .star-btn {
+      border: 1px solid #ddd;
+      background: #fff;
+      border-radius: 12px;
+      padding: 2px 8px;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .star-btn[aria-pressed="true"] {
+      background: #fff7cc;
+    }
+
+    .star-btn:hover {
+      background: #f3f3f3;
+    }
+
+    /* Markerade-vy (grid) */
+    #starredView {
+      display: none;
+      padding: 10px;
+    }
+
+    .starred-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
   </style>
 </head>
 
@@ -433,8 +473,10 @@
       <button id="kanbanBtn">Kanban</button>
       <button id="tableBtn">Tabell</button>
       <button id="dashboardBtn">Dashboard</button>
+      <button id="starredBtn">Markerade</button>
       <button id="handledBtn">Hanterade ärenden</button>
       <button id="fileButton" onclick="document.getElementById('csvFile').click()">Byt fil</button>
+      <button onclick="exportCSV()">Exportera CSV</button>
       <input type='file' id='csvFile' accept='.csv' style='display:none' />
     </div>
   </header>
@@ -494,6 +536,7 @@
   <div class='kanban-board' id='kanbanBoard'></div>
   <div id="tableView" style="display:none; padding:10px;"></div>
   <div id="dashboardView" style="display:none; padding:20px;"></div>
+  <div id="starredView" style="display:none; padding:10px;"></div>
 
 
   <script src='https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js'></script>
@@ -586,6 +629,48 @@
       return JSON.parse(localStorage.getItem("handledTickets") || "[]");
     }
 
+    /* --- Markerade (stjärnor) --- */
+    function getStarred() { return JSON.parse(localStorage.getItem('starredTickets') || '[]'); }
+    function saveStarred(list) { localStorage.setItem('starredTickets', JSON.stringify(list)); }
+    function isStarred(id) { return getStarred().includes(id); }
+
+    function toggleStarred(id) {
+      const list = getStarred();
+      const i = list.indexOf(id);
+
+      if (i >= 0) {
+        list.splice(i, 1);
+      } else {
+        list.push(id);
+      }
+
+      saveStarred(list);
+      syncStarIcons(id);
+      updateStarredButton(); // 👈 uppdatera knappen efter ändring
+
+      if (currentView === 'starred') {
+        renderStarredView();
+      }
+    }
+
+    function updateStarredButton() {
+      const list = getStarred();
+      const count = list.length;
+      document.getElementById("starredBtn").textContent = count > 0
+        ? `Markerade (${count})`
+        : "Markerade";
+    }
+
+
+    function syncStarIcons(id) {
+      const active = isStarred(id);
+      document.querySelectorAll(`.star-btn[data-ticket-id="${id}"]`).forEach(btn => {
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        btn.innerHTML = active ? '⭐' : '☆';
+        btn.title = active ? 'Avmarkera' : 'Markera';
+      });
+    }
+
 
 
     function saveHandled(list) {
@@ -654,23 +739,36 @@
       showView("dashboardView");
       applyFilters();
     });
+    document.getElementById('starredBtn').addEventListener('click', () => {
+      currentView = 'starred';
+      showView('starredView');
+      renderStarredView();
+    });
 
     // Hjälpfunktion för att alltid bara visa en vy
     function showView(viewId) {
-      const views = ["kanbanBoard", "tableView", "dashboardView"];
+      const views = ["kanbanBoard", "tableView", "dashboardView", "starredView"];
       views.forEach(id => {
         const el = document.getElementById(id);
-        if (id === viewId) {
-          if (id === "kanbanBoard") {
-            el.style.display = "flex";
+        if (el) {
+          if (id === viewId) {
+            if (id === "kanbanBoard") el.style.display = "flex";
+            else el.style.display = "block";
           } else {
-            el.style.display = "block";
+            el.style.display = "none";
           }
-        } else {
-          el.style.display = "none";
         }
       });
+
+      // Markera aktiv knapp
+      document.querySelectorAll("header button").forEach(btn => btn.classList.remove("active-view"));
+      if (viewId === "kanbanBoard") document.getElementById("kanbanBtn").classList.add("active-view");
+      if (viewId === "tableView") document.getElementById("tableBtn").classList.add("active-view");
+      if (viewId === "dashboardView") document.getElementById("dashboardBtn").classList.add("active-view");
+      if (viewId === "starredView") document.getElementById("starredBtn").classList.add("active-view");
     }
+
+
 
     // --- Filtrering ---
     function applyFilters() {
@@ -775,6 +873,8 @@
 
           const card = document.createElement('div');
           card.className = `kanban-card ${priorityClass}`;
+          const isStar = isStarred(ticketId);
+
           card.innerHTML = `
 
         <div class="card-body">
@@ -789,6 +889,9 @@
           <p class="card-desc">${(item['Beskrivning'] || "").slice(0, 120)}${item['Beskrivning']?.length > 120 ? "…" : ""}</p>
         </div>
         <div class="card-actions-bar">
+              <button class="star-btn" data-ticket-id="${ticketId}" aria-pressed="${isStar ? 'true' : 'false'}">
+      ${isStar ? '⭐' : '☆'}
+    </button>
           <button class="mark-handled" onclick="markHandled('${ticketId}')">✓</button>
           <button class="comment-badge" data-ticket-id="${ticketId}">
             💬 <span class="comment-count">${commentCount}</span>
@@ -797,11 +900,26 @@
         </div>
       `;
 
-          // Aktivera badge-klick → öppna kommentarer
+
+          // Stjärna
+          const starBtn = card.querySelector(`.star-btn[data-ticket-id="${ticketId}"]`);
+          starBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleStarred(ticketId);
+          });
+
+          // Kommentar
           const badge = card.querySelector(".comment-badge");
           badge.addEventListener("click", (e) => {
             e.stopPropagation();
             openComments(ticketId, item['Ämne'] || "");
+          });
+
+          // Hanterad
+          const handledBtn = card.querySelector(".mark-handled");
+          handledBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            markHandled(ticketId);
           });
 
           column.appendChild(card);
@@ -811,6 +929,79 @@
       });
     }
 
+
+    function renderStarredView() {
+      const container = document.getElementById('starredView');
+      const starredIds = getStarred();
+
+      if (starredIds.length === 0) {
+        container.innerHTML = `<p>Inga markerade ärenden ännu. Gå till Kanban och markera några med stjärnan (☆).</p>`;
+        return;
+      }
+
+      const comments = getComments();
+      const items = allData.filter(d => starredIds.includes(d['Ärende-ID']));
+
+      container.innerHTML = `<div class="starred-grid"></div>`;
+      const grid = container.querySelector('.starred-grid');
+      grid.innerHTML = '';
+
+      items.forEach(item => {
+        const ticketId = item['Ärende-ID'];
+        const link = `https://liseberghelp.visit.com/sv-SE/support/tickets/${ticketId}`;
+        const priority = item['Prioritet']?.toLowerCase();
+        let priorityClass = 'card-low';
+        if (priority === 'hög') priorityClass = 'card-high';
+        else if (priority === 'medel') priorityClass = 'card-medium';
+
+        const commentCount = (comments[ticketId] || []).length;
+        const isStar = isStarred(ticketId); // 👈 lägg till denna
+
+        const card = document.createElement('div');
+        card.className = `kanban-card ${priorityClass}`;
+        card.innerHTML = `
+  <div class="card-body">
+    <strong class="card-title">${item['Ämne']}</strong>
+    <div class="card-meta">
+      <span><em>ID:</em> ${ticketId}</span>
+      <span><em>Prioritet:</em> ${item['Prioritet']}</span>
+      <span><em>Typ:</em> ${item['Typ']}</span>
+      <span><em>Beställare:</em> ${item['Beställarens namn']}</span>
+      <span><em>Senast uppdaterad:</em> ${item['Tid för senaste uppdatering']}</span>
+    </div>
+    <p class="card-desc">
+      ${(item['Beskrivning'] || "").slice(0, 120)}${item['Beskrivning']?.length > 120 ? "…" : ""}
+    </p>
+  </div>
+  <div class="card-actions-bar">
+        <button class="star-btn" data-ticket-id="${ticketId}" aria-pressed="${isStar ? 'true' : 'false'}">
+      ${isStar ? '⭐' : '☆'}
+    </button>
+    <button class="mark-handled" title="Markera hanterad">✓</button>
+    <button class="comment-badge" data-ticket-id="${ticketId}">
+      💬 <span class="comment-count">${commentCount}</span>
+    </button>
+    <a class="card-link" href="${link}" target="_blank">↗</a>
+  </div>
+`;
+
+        grid.appendChild(card);
+
+        // Events
+        card.querySelector('.star-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleStarred(ticketId); // re-render sker i toggleStarred om vi står i denna vy
+        });
+        card.querySelector('.comment-badge').addEventListener('click', (e) => {
+          e.stopPropagation();
+          openComments(ticketId, item['Ämne'] || '');
+        });
+        card.querySelector('.mark-handled').addEventListener('click', (e) => {
+          e.stopPropagation();
+          markHandled(ticketId);
+        });
+      });
+    }
 
 
 
@@ -945,6 +1136,33 @@
         skipEmptyLines: true,
         complete: function (results) {
           allData = results.data;
+
+          // Hämta befintliga kommentarer
+          let existingComments = getComments();
+
+          // Kolla om det finns Kommentarer-kolumn
+          allData.forEach(item => {
+            const ticketId = item["Ärende-ID"];
+            if (item["Kommentarer"]) {
+              try {
+                const parsed = JSON.parse(item["Kommentarer"]);
+                if (Array.isArray(parsed)) {
+                  // Slå ihop befintliga och nya kommentarer
+                  existingComments[ticketId] = [
+                    ...(existingComments[ticketId] || []),
+                    ...parsed
+                  ];
+                }
+              } catch (err) {
+                console.warn("Kunde inte tolka kommentarer för", ticketId, err);
+              }
+            }
+          });
+
+          // Spara ihopslagna kommentarer
+          saveComments(existingComments);
+
+          // Spara data + rendera
           localStorage.setItem('csvData', JSON.stringify(allData));
           populateFilters(allData);
           applyFilters();
@@ -954,7 +1172,40 @@
     });
 
 
-    window.addEventListener('load', loadFromLocalStorage);
+
+
+    // --- Exportfunktion ---
+    function exportCSV() {
+      const comments = getComments();
+
+      // Gör en kopia av datan så vi inte muterar allData
+      const exportData = allData.map(item => {
+        const ticketId = item["Ärende-ID"];
+        const itemComments = comments[ticketId] || [];
+        return {
+          ...item,
+          Kommentarer: JSON.stringify(itemComments) // spara som JSON-sträng
+        };
+      });
+
+      const csv = Papa.unparse(exportData);
+
+      // Skapa en blob och ladda ned
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", "arenden_med_kommentarer.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    window.addEventListener('load', () => {
+      loadFromLocalStorage();
+      updateStarredButton();
+      showView("kanbanBoard");
+    });
   </script>
 </body>
 
