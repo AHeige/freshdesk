@@ -93,6 +93,66 @@
       text-align: center;
     }
 
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .card-title {
+      font-size: 1em;
+      font-weight: bold;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .card-actions-bar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 6px;
+      border-top: 1px solid #eee;
+      margin-top: 8px;
+    }
+
+    .card-actions-bar button,
+    .card-actions-bar a {
+      cursor: pointer;
+      font-size: 14px;
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 4px 6px;
+    }
+
+    .card-actions-bar button:hover,
+    .card-actions-bar a:hover {
+      background: #eee;
+    }
+
+    .card-meta {
+      font-size: 0.8em;
+      color: #555;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 6px;
+    }
+
+    .card-desc {
+      font-size: 0.85em;
+      color: #333;
+      max-height: 3.6em;
+      /* ca 3 rader */
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .kanban-card {
       background: white;
       margin: 5px 0;
@@ -124,44 +184,34 @@
     }
 
     .card-link {
-      position: absolute;
-      bottom: 8px;
-      right: 10px;
       font-size: 1.2em;
-      display: none;
       text-decoration: none;
+      color: #333;
     }
 
     .kanban-card:hover .card-link {
       display: inline;
     }
 
-    .kanban-card:hover .mark-handled {
-      display: inline;
-      opacity: 1;
-    }
+
 
     .mark-handled {
-      opacity: 0;
-      display: none;
-      position: absolute;
-      top: 6px;
-      right: 10px;
       background: #4caf50;
-      color: white;
+      color: rgb(97, 97, 97);
+      /* byt gärna till vitt igen för kontrast */
       border: none;
-      border-radius: 50%;
-      width: 22px;
-      height: 22px;
+      /* border-radius: 50%; */
       cursor: pointer;
       font-size: 14px;
-      line-height: 22px;
-      text-align: center;
-      padding: 0;
+      display: flex;
+      /* centrera med flex */
+      align-items: center;
+      justify-content: center;
+      padding: 4px 6px;
     }
 
     .mark-handled:hover {
-      background: #388e3c;
+      color: #00b409;
     }
 
     @keyframes fadeIn {
@@ -305,6 +355,71 @@
       justify-content: center;
       align-items: center;
     }
+
+    /* Badge på korten (större ikon) */
+    .comment-badge {
+      cursor: pointer;
+      font-size: 16px;
+      /* lite större än text */
+      background: #eee;
+      border-radius: 12px;
+      padding: 2px 8px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      border: 1px solid #ddd;
+    }
+
+    .comment-badge:hover {
+      background: #ddd;
+    }
+
+    /* Kommentar-modal – vi återanvänder .modal, lägger bara till chat-styles */
+    .chat-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+
+    .chat-message {
+      padding: 6px 10px;
+      margin: 4px 0;
+      border-radius: 12px;
+      max-width: 80%;
+      font-size: 0.9em;
+    }
+
+    .chat-message.self {
+      background: #d1f5d3;
+      margin-left: auto;
+    }
+
+    .chat-message.other {
+      background: #f1f1f1;
+      margin-right: auto;
+    }
+
+    .chat-input {
+      display: flex;
+      gap: 6px;
+    }
+
+    .chat-input input {
+      flex: 1;
+      padding: 6px;
+    }
+
+    .chat-input button {
+      padding: 6px 10px;
+      background: #333;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
   </style>
 </head>
 
@@ -362,6 +477,19 @@
     </div>
   </div>
 
+  <!-- Kommentar-modal -->
+  <div id="commentsModal" class="modal">
+    <div class="modal-content">
+      <button class="close-modal" onclick="closeComments()">Stäng</button>
+      <h2 id="commentsTitle"></h2>
+      <div id="chatBox" class="chat-box"></div>
+      <div class="chat-input">
+        <input type="text" id="commentInput" placeholder="Skriv en kommentar..." />
+        <button onclick="sendComment()">Skicka</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Vyer -->
   <div class='kanban-board' id='kanbanBoard'></div>
   <div id="tableView" style="display:none; padding:10px;"></div>
@@ -373,14 +501,93 @@
     let allData = [];
     let currentView = "kanban"; // aktiv vy
 
+    let currentTicketId = null;
+
+    /* Kommentar-storage (LocalStorage) */
+    function getComments() {
+      return JSON.parse(localStorage.getItem("ticketComments") || "{}");
+    }
+    function saveComments(obj) {
+      localStorage.setItem("ticketComments", JSON.stringify(obj));
+    }
+
+    /* Öppna/stäng modal */
+    function openComments(ticketId, subject) {
+      currentTicketId = ticketId;
+      document.getElementById("commentsTitle").textContent = `Kommentarer för ${ticketId} – ${subject || ""}`;
+      renderComments();
+      document.getElementById("commentsModal").style.display = "flex";
+
+      // Enter för att skicka
+      const input = document.getElementById("commentInput");
+      input.value = "";
+      input.onkeydown = (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendComment();
+        }
+      };
+      input.focus();
+    }
+    function closeComments() {
+      document.getElementById("commentsModal").style.display = "none";
+    }
+
+    /* Rendera chatt */
+    function renderComments() {
+      const comments = getComments();
+      const chatBox = document.getElementById("chatBox");
+      chatBox.innerHTML = "";
+      (comments[currentTicketId] || []).forEach((c, idx) => {
+        const div = document.createElement("div");
+        div.className = "chat-message " + (idx % 2 === 0 ? "self" : "other");
+        div.textContent = `${c.text} (${c.time})`;
+        chatBox.appendChild(div);
+      });
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    /* Skicka kommentar */
+    function sendComment() {
+      const input = document.getElementById("commentInput");
+      const text = input.value.trim();
+      if (!text || !currentTicketId) return;
+      const comments = getComments();
+      if (!comments[currentTicketId]) comments[currentTicketId] = [];
+      comments[currentTicketId].push({ text, time: new Date().toLocaleString() });
+      saveComments(comments);
+      input.value = "";
+      renderComments();
+      updateCommentBadgesFor(currentTicketId);
+    }
+
+    /* Uppdatera badge-count på alla kort för ett ticketId */
+    function updateCommentBadgesFor(ticketId) {
+      const comments = getComments();
+      const count = (comments[ticketId] || []).length;
+      document.querySelectorAll(`.comment-badge[data-ticket-id="${ticketId}"] .comment-count`)
+        .forEach(span => span.textContent = count);
+    }
+
+
+
+
+
     function setDataSource(text) {
       document.getElementById("dataSource").textContent = text;
     }
 
+
+
+
     // --- Hanterade ärenden ---
     function getHandled() {
+
       return JSON.parse(localStorage.getItem("handledTickets") || "[]");
     }
+
+
+
     function saveHandled(list) {
       localStorage.setItem("handledTickets", JSON.stringify(list));
       renderHandledList();
@@ -393,6 +600,8 @@
       }
       applyFilters();
     }
+
+
     function unmarkHandled(ticketId) {
       let handled = getHandled().filter(id => id !== ticketId);
       saveHandled(handled);
@@ -418,6 +627,8 @@
       });
     }
 
+
+
     // --- Modal ---
     document.getElementById("handledBtn").addEventListener("click", () => {
       document.getElementById("handledModal").style.display = "flex";
@@ -430,16 +641,36 @@
     // --- Vyknappar ---
     document.getElementById("kanbanBtn").addEventListener("click", () => {
       currentView = "kanban";
-      document.getElementById("kanbanBoard").style.display = "flex";
-      document.getElementById("tableView").style.display = "none";
+      showView("kanbanBoard");
       applyFilters();
     });
     document.getElementById("tableBtn").addEventListener("click", () => {
       currentView = "table";
-      document.getElementById("kanbanBoard").style.display = "none";
-      document.getElementById("tableView").style.display = "block";
+      showView("tableView");
       applyFilters();
     });
+    document.getElementById("dashboardBtn").addEventListener("click", () => {
+      currentView = "dashboard";
+      showView("dashboardView");
+      applyFilters();
+    });
+
+    // Hjälpfunktion för att alltid bara visa en vy
+    function showView(viewId) {
+      const views = ["kanbanBoard", "tableView", "dashboardView"];
+      views.forEach(id => {
+        const el = document.getElementById(id);
+        if (id === viewId) {
+          if (id === "kanbanBoard") {
+            el.style.display = "flex";
+          } else {
+            el.style.display = "block";
+          }
+        } else {
+          el.style.display = "none";
+        }
+      });
+    }
 
     // --- Filtrering ---
     function applyFilters() {
@@ -487,28 +718,41 @@
 
     // --- Rendera Kanban ---
     function renderKanban(data) {
-      console.log(data)
-
-
-      const allStatuses = [...new Set(allData.map(item => item['Status']))];
       const board = document.getElementById('kanbanBoard');
-      board.innerHTML = '';
 
-      if (data.length === 0) {
-        board.style.justifyContent = "center"
-        board.innerHTML = `<div class="no-data">Filen returnerade inte någon data - eller så har du inte valt någon fil än. 
-          <button id="fileButton" onclick="document.getElementById('csvFile').click()">Byt fil</button> 
-          </div>`
-      } else {
-        board.style.justifyContent = "unset"
-
+      // 1. Ingen data alls
+      if (!allData || allData.length === 0) {
+        board.style.justifyContent = "center";
+        board.innerHTML = `
+      <div class="no-data">
+        Ingen data laddad ännu.
+        <button onclick="document.getElementById('csvFile').click()">Byt fil</button>
+      </div>`;
+        return;
       }
 
+      // 2. Fil finns men filtreringen gav 0 rader
+      if (!data || data.length === 0) {
+        board.style.justifyContent = "center";
+        board.innerHTML = `
+      <div class="no-data">
+        Inga ärenden matchar dina filter.
+      </div>`;
+        return;
+      }
 
+      // 3. Rendera kolumner
+      board.style.justifyContent = "unset";
+      board.innerHTML = "";
+
+      const comments = getComments();
+      const allStatuses = [...new Set(allData.map(item => item['Status']))];
 
       allStatuses.forEach(status => {
         const columnItems = data.filter(item => item['Status'] === status);
-        columnItems.sort((a, b) => new Date(b['Tid för senaste uppdatering']) - new Date(a['Tid för senaste uppdatering']));
+        columnItems.sort((a, b) =>
+          new Date(b['Tid för senaste uppdatering']) - new Date(a['Tid för senaste uppdatering'])
+        );
 
         const column = document.createElement('div');
         column.className = 'kanban-column';
@@ -525,27 +769,51 @@
           if (priority === 'hög') priorityClass = 'card-high';
           else if (priority === 'medel') priorityClass = 'card-medium';
 
-          const card = document.createElement('div');
-          card.className = `kanban-card ${priorityClass}`;
           const ticketId = item['Ärende-ID'];
           const link = `https://liseberghelp.visit.com/sv-SE/support/tickets/${ticketId}`;
+          const commentCount = (comments[ticketId] || []).length;
+
+          const card = document.createElement('div');
+          card.className = `kanban-card ${priorityClass}`;
           card.innerHTML = `
-        <button class="mark-handled" onclick="markHandled('${ticketId}')">✓</button>
-        <strong>${item['Ämne']}</strong><br>
-        <em>ID:</em> ${ticketId}<br>
-        <em>Prioritet:</em> ${item['Prioritet']}<br>
-        <em>Typ:</em> ${item['Typ']}<br>
-        <em>Beställare:</em> ${item['Beställarens namn']}<br>
-        <em>Senast uppdaterad:</em> ${item['Tid för senaste uppdatering']}<br>
-        <p>${item['Beskrivning']}</p>
-        <a class='card-link' href='${link}' target='_blank'>&rarr;</a>
+
+        <div class="card-body">
+          <strong class="card-title">${item['Ämne']}</strong>
+          <div class="card-meta">
+            <span><em>ID:</em> ${ticketId}</span>
+            <span><em>Prioritet:</em> ${item['Prioritet']}</span>
+            <span><em>Typ:</em> ${item['Typ']}</span>
+            <span><em>Beställare:</em> ${item['Beställarens namn']}</span>
+            <span><em>Senast uppdaterad:</em> ${item['Tid för senaste uppdatering']}</span>
+          </div>
+          <p class="card-desc">${(item['Beskrivning'] || "").slice(0, 120)}${item['Beskrivning']?.length > 120 ? "…" : ""}</p>
+        </div>
+        <div class="card-actions-bar">
+          <button class="mark-handled" onclick="markHandled('${ticketId}')">✓</button>
+          <button class="comment-badge" data-ticket-id="${ticketId}">
+            💬 <span class="comment-count">${commentCount}</span>
+          </button>
+          <a class="card-link" href="${link}" target="_blank">↗</a>
+        </div>
       `;
+
+          // Aktivera badge-klick → öppna kommentarer
+          const badge = card.querySelector(".comment-badge");
+          badge.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openComments(ticketId, item['Ämne'] || "");
+          });
+
           column.appendChild(card);
         });
 
         board.appendChild(column);
       });
     }
+
+
+
+
 
     // --- Rendera Tabell ---
     function renderTable(data) {
@@ -595,6 +863,8 @@
         applyFilters();
         setDataSource("Visar senaste sparade data (lokalt)");
       } else {
+
+        renderKanban(allData)
         setDataSource("Ingen data laddad");
       }
     }
